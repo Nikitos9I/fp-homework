@@ -11,7 +11,7 @@ import Data.Function (fix)
 iterateElement :: a -> [a]
 iterateElement element = fix (\accum -> element : accum)
 
--- | Getting a Fibonacci number with the desired number 
+-- | Getting a Fibonacci number with the desired number
 fibonacci :: Integer -> Integer
 fibonacci =
   fix

@@ -12,18 +12,18 @@ foo char =
     True  -> Just $ exp pi
     False -> Nothing
 
--- | function for packing a value Left from char list into a pair 
+-- | function for packing a value Left from char list into a pair
 task6Function1 :: (Either String b, Either String c)
--- (Either String b, Either String c) - whnf, 
+-- (Either String b, Either String c) - whnf,
 -- because (,) - outermost pair constructor
--- Result whnf: 
---    ( Left ("harold" ++ " hide " ++ "the " ++ "pain"), 
+-- Result whnf:
+--    ( Left ("harold" ++ " hide " ++ "the " ++ "pain"),
 --    , Left ("harold" ++ " hide " ++ "the " ++ "pain")
 --    )
 task6Function1 =
   distributivity (Left ("harold" ++ " hide " ++ "the " ++ "pain"))
 
--- | function for checking the list obtained by converting the letters 'o' 
+-- | function for checking the list obtained by converting the letters 'o'
 -- from the list of characters to the exponent of the number PI, to empty
 task6Function2 :: Bool
 -- Bool - whnf

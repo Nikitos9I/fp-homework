@@ -61,7 +61,7 @@ task7Function1 = dotNullHeadMapUncurryIdPPDorianGrey
                 ppDorian = ((++) "Dorian " :: [Char] -> [Char])
                 grey = " Grey" :: [Char]
 
--- | Function that a function that makes a list of pairs (fromLeft, fromRight) 
+-- | Function that a function that makes a list of pairs (fromLeft, fromRight)
 -- from a list of Lefts and Rights
 --
 -- Source expression:
