@@ -20,46 +20,46 @@ task7Function1 = dotNullHeadMapUncurryIdPPDorianGrey
     dotNullHeadMapUncurryIdPPDorianGrey =
       dollar dotNullHead mapUncurryIdPPDorianGrey
       where
-        dotNullHead :: [[Char]] -> Bool
-        dotNullHead = dotNull (head :: [[Char]] -> [Char])
+        dotNullHead :: [String] -> Bool
+        dotNullHead = dotNull (head :: [String] -> String)
           where
-            dotNull :: ([[Char]] -> [Char]) -> [[Char]] -> Bool
-            dotNull = dot (null :: [Char] -> Bool)
+            dotNull :: ([String] -> String) -> [String] -> Bool
+            dotNull = dot (null :: String -> Bool)
               where
                 dot ::
-                     ([Char] -> Bool)
-                  -> ([[Char]] -> [Char])
-                  -> [[Char]]
+                     (String -> Bool)
+                  -> ([String] -> String)
+                  -> [String]
                   -> Bool
                 dot = (.)
-        dollar :: ([[Char]] -> Bool) -> [[Char]] -> Bool
+        dollar :: ([String] -> Bool) -> [String] -> Bool
         dollar = ($)
-        mapUncurryIdPPDorianGrey :: [[Char]]
+        mapUncurryIdPPDorianGrey :: [String]
         mapUncurryIdPPDorianGrey = mapOpUncurryId ppDorianGrey
           where
-            mapOpUncurryId :: [([Char] -> [Char], [Char])] -> [[Char]]
+            mapOpUncurryId :: [(String -> String, String)] -> [String]
             mapOpUncurryId = mapOp uncurryId
               where
                 mapOp ::
-                     (([Char] -> [Char], [Char]) -> [Char])
-                  -> [([Char] -> [Char], [Char])]
-                  -> [[Char]]
+                     ((String -> String, String) -> String)
+                  -> [(String -> String, String)]
+                  -> [String]
                 mapOp = map
-                uncurryId :: ([Char] -> [Char], [Char]) -> [Char]
+                uncurryId :: (String -> String, String) -> String
                 uncurryId = uncurryOp idOp
                   where
                     uncurryOp ::
-                         (([Char] -> [Char]) -> [Char] -> [Char])
-                      -> ([Char] -> [Char], [Char])
-                      -> [Char]
+                         ((String -> String) -> String -> String)
+                      -> (String -> String, String)
+                      -> String
                     uncurryOp = uncurry
-                    idOp :: ([Char] -> [Char]) -> [Char] -> [Char]
+                    idOp :: (String -> String) -> String -> String
                     idOp = id
-            ppDorianGrey :: [([Char] -> [Char], [Char])]
+            ppDorianGrey :: [(String -> String, String)]
             ppDorianGrey = [(ppDorian, grey)]
               where
-                ppDorian = ((++) "Dorian " :: [Char] -> [Char])
-                grey = " Grey" :: [Char]
+                ppDorian = (++) "Dorian " :: String -> String
+                grey = " Grey" :: String
 
 -- | Function that a function that makes a list of pairs (fromLeft, fromRight)
 -- from a list of Lefts and Rights
@@ -133,22 +133,22 @@ task7Function3 :: (I -> Bool)
 task7Function3 =
   let impl =
         \x y ->
-          (((((||) :: Bool -> Bool -> Bool)
-               (((not) :: Bool -> Bool) (x :: Bool)) :: Bool -> Bool)
-              (y :: Bool)) :: Bool)
+          (((||) :: Bool -> Bool -> Bool)
+           ((not :: Bool -> Bool) (x :: Bool)) :: Bool -> Bool)
+            (y :: Bool) :: Bool
    in let isMod2 =
             \x ->
-              ((((==) :: I -> I -> Bool)
-                  (((((mod) :: I -> I -> I) (x :: I)) :: I -> I)
-                   (2 :: I) :: I) :: I -> Bool)
-                 (0 :: I)) :: Bool
+              (((==) :: I -> I -> Bool)
+                 (((mod :: I -> I -> I) (x :: I) :: I -> I)
+                  (2 :: I) :: I) :: I -> Bool)
+                (0 :: I) :: Bool
        in let isMod4 =
                 \x ->
-                  ((((==) :: I -> I -> Bool)
-                      (((((mod) :: I -> I -> I) (x :: I)) :: I -> I)
-                       (4 :: I) :: I) :: I -> Bool)
-                     (0 :: I)) :: Bool
+                  (((==) :: I -> I -> Bool)
+                     (((mod :: I -> I -> I) (x :: I) :: I -> I)
+                      (4 :: I) :: I) :: I -> Bool)
+                    (0 :: I) :: Bool
            in \x ->
-                (((impl :: Bool -> Bool -> Bool)
-                    (((isMod4 :: I -> Bool) (x :: I)) :: Bool) :: Bool -> Bool)
-                   (((isMod2 :: I -> Bool) (x :: I)) :: Bool) :: Bool)
+                ((impl :: Bool -> Bool -> Bool)
+                   ((isMod4 :: I -> Bool) (x :: I) :: Bool) :: Bool -> Bool)
+                  ((isMod2 :: I -> Bool) (x :: I) :: Bool) :: Bool
