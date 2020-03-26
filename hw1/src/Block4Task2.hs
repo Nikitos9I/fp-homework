@@ -11,7 +11,6 @@ instance Functor Tree where
 
 instance Applicative Tree where
   pure = Leaf
-  
   (<*>) f (Leaf x)     = fmap ($ x) f
   (<*>) f (Branch l r) = Branch (f <*> l) (f <*> r)
 

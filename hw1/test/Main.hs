@@ -16,12 +16,13 @@ import Block3Task1
 import Block3Task2
 import Block4Task1
 import qualified Block4Task2 as B4T2
+import Block5Task1
 
 main :: IO ()
 main = defaultMain runTests
 
 runTests :: TestTree
-runTests = testGroup "All unit tests" [block1, block2, block3, block4]
+runTests = testGroup "All unit tests" [block1, block2, block3, block4, block5]
 
 block1 :: TestTree
 block1 = testGroup "Block1 tests" [b1t1, b1t2, b1t3]
@@ -34,6 +35,9 @@ block3 = testGroup "Block3 tests" [b3t1, b3t2]
 
 block4 :: TestTree
 block4 = testGroup "Block4 tests" [b4t1, b4t2]
+
+block5 :: TestTree
+block5 = testGroup "Block5 tests" [b5t1]
 
 b1t1 :: TestTree
 b1t1 =
@@ -108,12 +112,14 @@ b1t3 =
     , testCase "Check element exists in tree" $
       findElem
         (2 :: Int)
-        (Node (Many 4 $ Many 4 $ One 4) (Node (Many 2 $ One 2) Leaf Leaf) Leaf) `shouldSatisfy`
+        (Node (Many 4 $ Many 4 $ One 4) (Node (Many 2 $ One 2) Leaf Leaf) Leaf) 
+        `shouldSatisfy`
       isJust
     , testCase "Check element does not exist in tree" $
       findElem
         (8 :: Int)
-        (Node (Many 4 $ Many 4 $ One 4) (Node (Many 2 $ One 2) Leaf Leaf) Leaf) `shouldSatisfy`
+        (Node (Many 4 $ Many 4 $ One 4) (Node (Many 2 $ One 2) Leaf Leaf) Leaf) 
+        `shouldSatisfy`
       isNothing
     , testCase "Insert element in tree with node extension" $
       insertElem (2 :: Int) (Node (Many 2 $ One 2) Leaf Leaf) @?=
@@ -171,8 +177,8 @@ b3t1 =
     [ testCase "Check `maybeConcat` function" $
       maybeConcat [Just [1, 2, 3], Nothing, Just [4, 5]] @?= [1, 2, 3, 4, 5]
     , testCase "Check `eitherConcat` function" $
-      eitherConcat [Left (Sum 3), Right [1, 2, 3], Left (Sum 5), Right [4, 5]] @?=
-      (Sum {getSum = 8}, [1, 2, 3, 4, 5])
+      eitherConcat [Left (Sum 3), Right [1, 2, 3], Left (Sum 5), Right [4, 5]] 
+      @?= (Sum {getSum = 8}, [1, 2, 3, 4, 5])
     ]
 
 b3t2 :: TestTree
@@ -180,7 +186,8 @@ b3t2 =
   testGroup
     "Task 2"
     [ testCase "Check NonEmpty Semigroup" $
-      "a" Block3Task2.:| ["ti", "uzhe", "sdelal"] <> "dz" Block3Task2.:| ["po"] <>
+      "a" Block3Task2.:| ["ti", "uzhe", "sdelal"] <> "dz" Block3Task2.:| ["po"] 
+      <>
       "func" Block3Task2.:|
       ["programming"] @?=
       "adzfunc" Block3Task2.:|
@@ -195,25 +202,43 @@ b3t2 =
       Name "root" <> Name "server" @?= Name "root.server"
     , testCase "Check Name Monoid" $
       Name "root" <> Name mempty <> Name "hoho" @?= Name "root..hoho"
---    , testCase "Check Endo Semigroup" $
---      Endo {getEndo = id "a"} <> Endo "b" <> Endo "c" @?= Endo "abc"
     ]
 
+--    , testCase "Check Endo Semigroup" $
+--      Endo {getEndo = id "a"} <> Endo "b" <> Endo "c" @?= Endo "abc"
 b4t1 :: TestTree
 b4t1 =
-  testGroup "Task 1"
-    [ testCase "Check string sum valid" $
-      stringSum "12 50 100.2" @?= Just 162.2
+  testGroup
+    "Task 1"
+    [ testCase "Check string sum valid" $ stringSum "12 50 100.2" @?= Just 162.2
     , testCase "Check string sum invalid1" $
       stringSum "12.213 42 a231" @?= Nothing
-    , testCase "Check string sum invalid2" $
-      stringSum "1a2" @?= Nothing
+    , testCase "Check string sum invalid2" $ stringSum "1a2" @?= Nothing
     ]
 
 b4t2 :: TestTree
-b4t2 = testGroup "Task2"
-    [ --testCase "Check tree functor" $
---      fmap (* (2 :: Int)) (B4T2.Branch (B4T2.Leaf (4 :: Int)) (B4T2.Leaf (2 :: Int))) @?= 8 :: Int
---    testCase "Check tree applicative" $
---      ((B4T2.Branch (B4T2.Leaf (+ 1)) (B4T2.Leaf (+ 2)) <*> B4T2.Leaf 7) :: B4T2.Tree) @?= ((B4T2.Branch (B4T2.Leaf 8) (B4T2.Leaf 9)) :: B4T2.Tree)
+b4t2 = testGroup "Task2" []
+
+b5t1 :: TestTree
+b5t1 =
+  testGroup
+    "Task1"
+    [ testCase "Check const" $ eval (Const 2) @?= Right 2
+    , testCase "Check sum" $ eval (Add (Const 2) (Const 3)) @?= Right 5
+    , testCase "Check substitution" $
+      eval (Sub (Const 5) (Const 10)) @?= Right (-5)
+    , testCase "Check muliplication" $
+      eval (Mul (Const 2) (Const 3)) @?= Right 6
+    , testCase "Check division" $ eval (Div (Const 15) (Const 3)) @?= Right 5
+    , testCase "Check division exception" $
+      eval (Div (Const 15) (Const 0)) @?= Left DivisionByZero
+    , testCase "Check pow" $ eval (Pow (Const 2) (Const 3)) @?= Right 8
+    , testCase "Check pow exception" $
+      eval (Pow (Const 2) (Const (-2))) @?= Left PowMinus
+    , testCase "Complex Test" $
+      eval
+        (Mul
+           (Add (Const 2) (Sub (Div (Const 15) (Const 2)) (Const (-100))))
+           (Pow (Mul (Const 7) (Const 8)) (Const 3))) @?=
+      Right 19142144
     ]

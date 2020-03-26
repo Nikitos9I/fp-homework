@@ -1,7 +1,12 @@
-module Block5Task1 where
+module Block5Task1
+  ( Expr(..)
+  , ArithmeticError(..)
+  , eval
+  ) where
 
 import Control.Monad
 
+-- | Expression
 data Expr
   = Const Int
   | Add Expr Expr
@@ -9,10 +14,12 @@ data Expr
   | Mul Expr Expr
   | Div Expr Expr
   | Pow Expr Expr
+  deriving (Eq)
 
 data ArithmeticError
   = DivisionByZero
   | PowMinus
+  deriving (Eq)
 
 instance Show ArithmeticError where
   show DivisionByZero = "Division by zero"
@@ -21,6 +28,7 @@ instance Show ArithmeticError where
 eval' :: (Int -> Int -> Int) -> Expr -> Expr -> Either ArithmeticError Int
 eval' f a b = liftM2 f (eval a) (eval b)
 
+-- | Compute expression
 eval :: Expr -> Either ArithmeticError Int
 eval (Const a) = Right a
 eval (Add a b) = eval' (+) a b

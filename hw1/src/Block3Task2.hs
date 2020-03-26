@@ -56,4 +56,4 @@ instance (Semigroup a) => Semigroup (Endo a) where
 
 instance (Monoid a) => Monoid (Endo a) where
   mempty :: Endo a
-  mempty = Endo mempty
+  mempty = Endo id
