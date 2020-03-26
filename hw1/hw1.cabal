@@ -1,0 +1,60 @@
+name:                hw1
+version:             0.1.0.0
+synopsis:            Synopsis for task 0
+description:         Task 0 for FP ITMO course
+
+homepage:            https://github.com/nikitos9i/fp-homework/tree/master/hw1#readme
+license:             MIT
+license-file:        LICENSE
+author:              nikitos9i
+maintainer:          savinov_nikitka@mail.ru
+copyright:           2020 nikitos9i
+
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+tested-with:         GHC == 8.0.1
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Block1Task1
+                     , Block1Task2
+                     , Block1Task3
+                     , Block2Task1
+                     , Block2Task2
+                     , Block3Task1
+                     , Block3Task2
+                     , Block4Task1
+                     , Block4Task2
+                     , Block5Task1
+                     , Block5Task2
+  ghc-options:         -Wall
+  build-depends:       base >= 4.9 && < 5
+                     , mtl
+  default-language:    Haskell2010
+
+executable hw1
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , mtl
+                     , hw1
+  default-language:    Haskell2010
+
+test-suite hw1-test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      Paths_hw1
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , hw1
+    , tasty
+    , tasty-hspec
+    , tasty-hunit
+  default-language: Haskell2010
