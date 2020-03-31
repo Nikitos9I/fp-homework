@@ -1,4 +1,6 @@
-module Block6Task1 where
+module Block6Task1
+  ( Parser(..)
+  ) where
 
 import Control.Applicative
 
@@ -13,8 +15,8 @@ parser p = Parser {runParser = p}
 instance Functor (Parser s) where
   fmap f p =
     parser $ \x -> do
-      (a, rest) <- runParser p x
-      return (f a, rest)
+      (s, rest) <- runParser p x
+      return (f s, rest)
 
 instance Applicative (Parser s) where
   pure a = parser $ \x -> return (a, x)
