@@ -1,4 +1,4 @@
-name:           hw1-second-chance
+name:                hw1-second-chance
 version:             0.1.0.0
 synopsis:            Synopsis for task 0
 description:         Task 0 for FP ITMO course
@@ -17,7 +17,7 @@ cabal-version:       >=1.10
 tested-with:         GHC == 8.0.1
 
 library
-  hs-source-dirs:    src
+  hs-source-dirs:   src
   exposed-modules:  Block6Task1
                   , Block6Task2
                   , Block6Task3
