@@ -1,9 +1,25 @@
 module Main where
 
-import IO
-import UI
+import IO (FMOptions(..), initState)
 import Options.Applicative
-import System.Directory
+  ( Parser
+  , (<**>)
+  , execParser
+  , fullDesc
+  , header
+  , help
+  , helper
+  , info
+  , long
+  , metavar
+  , progDesc
+  , short
+  , showDefault
+  , strOption
+  , value
+  )
+import System.Directory (doesDirectoryExist, makeAbsolute)
+import UI (run)
 
 opts :: Parser FMOptions
 opts =
@@ -24,7 +40,8 @@ main = runUI =<< execParser options
       info
         (opts <**> helper)
         (fullDesc <> header "Smart File Manager With VCS" <>
-         progDesc "A simple file manager with control version system usage")
+         progDesc
+           "A simple file manager with control version system under the hood")
 
 runUI :: FMOptions -> IO ()
 runUI options = do
@@ -34,10 +51,7 @@ runUI options = do
       then makeAbsolute $ dirPath options
       else return []
   case _path of
-    [] -> putStrLn "Requires at least one dir path"
+    [] -> putStrLn "Requires dir path"
     _ -> do
-        state <- initState options
-        run state
---        eventChan <- Brick.BChan.newBChan 10
---        state <- Mngr.makeState path editComm eventChan (threadNum options)
---        void $ customMain buildVty (Just eventChan) (app atrm) state
+      state <- initState options
+      run state

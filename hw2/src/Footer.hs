@@ -22,7 +22,7 @@ back :: FooterElem
 back = "Go back"
 
 helpT :: FooterElemTitle
-helpT = " Ctrl + H "
+helpT = " Ctrl + C "
 
 authorT :: FooterElemTitle
 authorT = " Author "
@@ -34,7 +34,7 @@ backT :: FooterElemTitle
 backT = " Ctrl + Z "
 
 renderFooterWidget :: (FooterElem, FooterElemTitle) -> Widget String
-renderFooterWidget (fe, fet) = modifs . vLimit 2 $ hLimit (wdt + 2) $ vBox [top, middle]
+renderFooterWidget (fe, fet) = modifs $ hLimit (wdt + 2) $ vBox [top, middle]
   where
     modifs = withBorderStyle unicodeRounded
     wdt = max (length fe) (length fet)
@@ -48,7 +48,7 @@ renderFooterWidget (fe, fet) = modifs . vLimit 2 $ hLimit (wdt + 2) $ vBox [top,
 
 draw :: Widget String
 draw =
-  hBox
+  vLimit 2 $ hBox
     [ renderFooterWidget (help, helpT)
     , renderFooterWidget (search, searchT)
     , renderFooterWidget (back, backT)

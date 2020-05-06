@@ -10,16 +10,21 @@ import Control.Monad.State
 import Data.HashMap.Lazy as DHL hiding (filter)
 import Data.Hashable
 import Data.Maybe
-import Data.Text (Text, pack)
+import Data.Text as T (Text, pack, lines, empty)
 import Data.Time.Clock
 import System.Directory
 import System.FilePath ((</>), splitPath, takeExtension, takeFileName)
 import System.IO (IOMode(..), hGetContents, openFile)
 
 type MapFPtoEntity = HashMap FilePath Entity
+
 type TextEditor = Editor Text String
-type VCSMap = HashMap FilePath [(Entity, String)]
-type VCSList = GenericList String [] String
+
+type VCSMapFPtoData = HashMap FilePath [(Entity, Text)]
+
+type VCSList = GenericList String [] Text
+
+type VCSMapFPtoList = HashMap FilePath VCSList
 
 newtype FMOptions =
   FMOptions
@@ -36,15 +41,36 @@ data MState =
     , action :: Action
     , vcs :: VCS
     }
-    
-data VCS = VCS {vcsMap :: VCSMap, vcsList :: VCSList} | VCSNothing
+
+data VCS
+  = VCS
+      { rootFP :: FilePath
+      , vcsMapData :: VCSMapFPtoData
+      , vcsMapList :: VCSMapFPtoList
+      }
+  | VCSNothing
 
 data Action
-  = Mkdir { mEditor :: TextEditor, mPath :: FilePath }
-  | Touch { tEditor :: TextEditor, tPath :: FilePath }
-  | Search { sEditor :: TextEditor, sQuery :: Text }
+  = Mkdir
+      { mEditor :: TextEditor
+      , mPath :: FilePath
+      }
+  | Touch
+      { tEditor :: TextEditor
+      , tPath :: FilePath
+      }
+  | Search
+      { sEditor :: TextEditor
+      , sQuery :: Text
+      }
+  | VCSAdditionalComment
+      { aEditor :: TextEditor
+      , aComment :: Text
+      }
   | DisplayInfo Entity
   | DisplayError String
+  | DisplayFile Text
+  | DisplayHelp
   | Nothing_
 
 instance Show Action where
@@ -52,6 +78,8 @@ instance Show Action where
   show (Touch _ _) = " Touch File "
   show (DisplayInfo _) = " Entry Info "
   show (Search _ _) = " Search "
+  show (VCSAdditionalComment _ _) = " Additional comment "
+  show DisplayHelp = " Help "
   show _ = " Error "
 
 data InfoFile =
@@ -63,11 +91,12 @@ data InfoFile =
     , fType :: String
     , fPath :: FilePath
     , fTimes :: Maybe (UTCTime, UTCTime)
+    , fContentList :: GenericList String [] Text
     }
   deriving (Show)
 
 instance Hashable InfoFile where
-  hashWithSalt salt (InfoFile n _ s _ _ p _) = salt + hash n + hash s + hash p
+  hashWithSalt salt (InfoFile n _ s _ _ p _ _) = salt + hash n + hash s + hash p
 
 data InfoDir =
   InfoDir
@@ -144,6 +173,8 @@ makeFileInfo filePath = do
   fileSize <- getFileSize filePath
   filePerms <- toMaybe <$> try (getPermissions filePath)
   fileTimes <- toMaybe <$> try (getTimes filePath)
+  let entryList =
+        list "fContent" (filter (/= T.empty) (T.lines $ pack content)) 1
   return $
     InfoFile
       fileName
@@ -153,6 +184,7 @@ makeFileInfo filePath = do
       fileType
       filePath
       fileTimes
+      entryList
 
 getRecursiveContents :: FilePath -> FilePath -> IO MapFPtoEntity
 getRecursiveContents topDir _parent = do

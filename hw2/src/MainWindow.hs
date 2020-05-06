@@ -1,6 +1,6 @@
 module MainWindow where
 
-import Brick (Widget(..), (<+>), hBox, str, vBox, EventM, BrickEvent(..), Next, continue)
+import Brick (Widget(..), (<+>), hBox, str, vBox, EventM, BrickEvent(..), Next, continue, txt, vLimitPercent)
 import Brick.Widgets.Border (borderElem, hBorderWithLabel, vBorder)
 import Brick.Widgets.Border.Style (bsCornerBL, bsCornerBR)
 import Brick.Widgets.Core (fill, hLimit, strWrap, vLimit)
@@ -30,10 +30,11 @@ import IO
   , MState(..)
   , MapFPtoEntity
   )
-import Manager (Content(..), updateList, renderSize)
+import Manager (Content(..), updateList, renderSize, updateFileList)
 import System.Directory (Permissions(..))
 import Graphics.Vty (Event(..))
 import MainEditor (render, TextEditor)
+import qualified Data.Text as T (lines)
 
 newtype TextEditorState = State { editor :: TextEditor }
 
@@ -60,7 +61,6 @@ renderFileH' :: Widget String
 renderFileH' = str ""
 
 renderHeaderWidget :: MState -> Content -> (Widget String, Widget String)
---renderHeaderWidget s SearchContent = (renderSearchH s, renderSearchH')
 renderHeaderWidget s DirContent = (renderCurDirH s, renderCurDirH')
 renderHeaderWidget s FileContent = (renderFileH s, renderFileH')
 
@@ -136,9 +136,10 @@ renderCurDirC s = renderList (makeWidgetFromEntity $ refMap s) True _list
     _list = (dEntryList . dir . curEntry) s
 
 renderFileC :: MState -> Widget String
---renderFileC s = MainEditor.render ((fContent . file . curEntry) s)
-renderFileC s = str "asd"
-  
+renderFileC s = renderList (const txt) False _list
+  where
+    _list = (fContentList . file . curEntry) s
+
 emptyContent :: Widget String
 emptyContent = vBox (lns ++ [fill ' '])
   where
@@ -164,8 +165,14 @@ draw state content = vBox [header, container]
 ------------------------------------------------------------------------
 
 handleEvent :: Event -> MState -> EventM String (Next MState)
-handleEvent ev st = do
-  op <- handleListEvent ev _list
-  continue $ updateList op st
-  where
-    _list = (dEntryList . dir . curEntry) st
+handleEvent ev st = case curEntry st of 
+  Dir i _ _ -> do
+    op <- handleListEvent ev _list
+    continue $ updateList op st
+    where
+      _list = dEntryList i
+  File i _ -> do
+    op <- handleListEvent ev _list
+    continue $ updateFileList op st
+    where
+      _list = fContentList i

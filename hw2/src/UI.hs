@@ -1,6 +1,6 @@
 module UI where
 
-import Brick (AttrName, BrickEvent(..), EventM, Next, Widget(..), App(..), showFirstCursor, attrMap, defaultMain, attrName, vBox, AttrName(..), strWrap, str)
+import Brick (AttrName, BrickEvent(..), EventM, Next, Widget(..), App(..), showFirstCursor, attrMap, defaultMain, attrName, vBox, AttrName(..), strWrap, str, vLimit, vLimitPercent)
 import Brick.Main (halt, continue)
 import Graphics.Vty
 import IO (Entity(..), MState(..), Action(..), InfoDir(..), InfoFile(..), TextEditor)
@@ -11,15 +11,14 @@ import Brick.Themes (Theme, themeToAttrMap, newTheme)
 import Brick.Util (on, fg, bg)
 import Brick.Widgets.Edit (editFocusedAttr, renderEditor)
 import Brick.Widgets.List (listSelectedFocusedAttr, listSelectedAttr)
-import Manager (openEntry, getMode, goBack, openSearch, deleteEntity, displayInfo, makeDirectory, makeFile)
+import Manager (openEntry, getMode, goBack, openSearch, deleteEntity, displayInfo, makeDirectory, makeFile, addEntity, init, openHelp)
 import MainEditor (handleEvent, render, editorAttr, keybindAttr)
 import Debug.Trace
 
 drawResults :: MState -> [Widget String]
-drawResults s = [ui]
+drawResults s = [widgets]
   where
-    ui = vBox widgets
-    widgets = [MainWindow.draw s $ getMode s, Footer.draw]
+    widgets = vBox [MainWindow.draw s $ getMode s, Footer.draw]
        
 draw :: MState -> [Widget String]
 --draw s | trace (show $ action s) False = undefined
@@ -38,6 +37,9 @@ handleMain s (VtyEvent ev) = case ev of
   EvKey (KChar 'p') [MCtrl] -> displayInfo s
   EvKey (KChar 'd') [MCtrl] -> makeDirectory s
   EvKey (KChar 't') [MCtrl] -> makeFile s
+  EvKey (KChar 'v') [MCtrl] -> Manager.init s
+  EvKey (KChar 'a') [MCtrl] -> addEntity s
+  EvKey (KChar 'c') [MCtrl] -> openHelp s
   _ -> MainWindow.handleEvent ev s
 handleMain s _ = continue s
 

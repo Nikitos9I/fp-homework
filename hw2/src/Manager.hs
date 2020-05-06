@@ -7,9 +7,16 @@ import Brick.Main (continue, suspendAndResume)
 import Brick.Widgets.Edit (editorText)
 import Brick.Widgets.List (GenericList, list, listSelectedElement)
 import Control.Exception (SomeException, try)
-import Data.HashMap.Lazy as DHL (delete, filterWithKey, insert, lookup, keys, empty)
+import Data.HashMap.Lazy as DHL
+  ( delete
+  , empty
+  , filterWithKey
+  , insert
+  , keys
+  , lookup
+  )
 import Data.Maybe (fromJust)
-import Data.Text (pack, isInfixOf, empty)
+import Data.Text (empty, isInfixOf, pack, Text)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Debug.Trace
 import IO
@@ -20,13 +27,12 @@ import IO
   , MState(..)
   , MapFPtoEntity
   , TextEditor
+  , VCS(..)
   )
 import System.Process (callCommand)
-
 import Control.Monad.IO.Class (liftIO)
 import Data.Time.Clock (getCurrentTime)
 import System.Directory.Internal (Permissions(..))
---import System.Directory (Permissions(..))
 import System.FilePath.Posix ((</>), takeExtension)
 
 data Content
@@ -44,6 +50,12 @@ updateList lst x = x {curEntry = entry}
   where
     entry = (curEntry x) {dir = infoDir}
     infoDir = ((dir . curEntry) x) {dEntryList = lst}
+      
+updateFileList :: GenericList String [] Text -> MState -> MState
+updateFileList lst x = x {curEntry = entry}
+  where
+    entry = (curEntry x) {file = infoFile}
+    infoFile = ((file . curEntry) x) {fContentList = lst}
 
 selectedEntity :: MState -> Maybe FilePath
 selectedEntity x =
@@ -70,16 +82,9 @@ openEntry state =
     Just fp ->
       case DHL.lookup fp (refMap state) of
         Just (Dir info _ _) -> continue $ openEntry' state (dPath info)
-        Just (File info _) -> suspendAndResume $ runExternal (fPath info) state
+        Just (File info _) -> continue $ openEntry' state (fPath info)
         _ -> error "Unreacheble pattern"
     _ -> continue state
-
-runExternal :: String -> MState -> IO MState
-runExternal com s = do
-  _ <- try $ callCommand ("nano " ++ com) :: IO (Either SomeException ())
-  putStrLn "Done. Press ENTER to go back to file manager by Nikitos9I"
-  _ <- getLine
-  return s
 
 goBack :: MState -> EventM String (Next MState)
 -- handle exception with go back from root
@@ -289,6 +294,7 @@ makeNewFile st _fileName = do
           , fType = takeExtension _filePath
           , fPath = _filePath
           , fTimes = Just (_times, _times)
+          , fContentList = list "fContent" [] 1
           }
   return $ File _file ((dPath . dir . curEntry) st)
 
@@ -325,3 +331,22 @@ handleSearchEvent st = do
           then DHL.empty
           else DHL.filterWithKey (\k _ -> _searchQuery `isInfixOf` pack k) _map
   DHL.keys _searchResult
+  
+openHelp :: MState -> EventM String (Next MState)
+openHelp st = continue $ st {action = DisplayHelp} 
+
+init :: MState -> EventM String (Next MState)
+-- handle exception with init not from dir
+init st = continue $ st {vcs = _vcs}
+  where
+    _vcs =
+      VCS
+        { rootFP = (dPath . dir . curEntry) st
+        , vcsMapData = DHL.empty
+        , vcsMapList = DHL.empty
+        }
+
+addEntity :: MState -> EventM String (Next MState)
+-- handle exception with vcs initiated
+addEntity st =
+  continue $ st {action = VCSAdditionalComment (initTextEditor "ade") mempty}
