@@ -18,6 +18,8 @@ import System.IO (IOMode(..), hGetContents, openFile)
 
 type MapFPtoEntity = HashMap FilePath Entity
 type TextEditor = Editor Text String
+type VCSMap = HashMap FilePath [(Entity, String)]
+type VCSList = GenericList String [] String
 
 newtype FMOptions =
   FMOptions
@@ -27,11 +29,20 @@ newtype FMOptions =
 instance Splittable [] where
   splitAt n xs = (take n xs, drop n xs)
 
+data MState =
+  State
+    { curEntry :: Entity
+    , refMap :: MapFPtoEntity
+    , action :: Action
+    , vcs :: VCS
+    }
+    
+data VCS = VCS {vcsMap :: VCSMap, vcsList :: VCSList} | VCSNothing
+
 data Action
-  = Mkdir TextEditor FilePath
-  | Touch TextEditor FilePath
-  | GoTo TextEditor
-  | Search { editor :: TextEditor, path :: FilePath }
+  = Mkdir { mEditor :: TextEditor, mPath :: FilePath }
+  | Touch { tEditor :: TextEditor, tPath :: FilePath }
+  | Search { sEditor :: TextEditor, sQuery :: Text }
   | DisplayInfo Entity
   | DisplayError String
   | Nothing_
@@ -39,17 +50,9 @@ data Action
 instance Show Action where
   show (Mkdir _ _) = " Make Directory "
   show (Touch _ _) = " Touch File "
-  show (GoTo _) = " Go To "
   show (DisplayInfo _) = " Entry Info "
   show (Search _ _) = " Search "
   show _ = " Error "
-
-data MState =
-  State
-    { curEntry :: Entity
-    , refMap :: MapFPtoEntity
-    , action :: Action
-    }
 
 data InfoFile =
   InfoFile
@@ -177,7 +180,7 @@ initState opt = do
   let _dir = dirPath opt
   _content <- getRecursiveContents _dir mempty
   let root = fromJust $ DHL.lookup _dir _content
-  return $ State root _content Nothing_
+  return $ State root _content Nothing_ VCSNothing
 
 testOpt :: FMOptions
 testOpt = FMOptions {dirPath = "/Users/nikita.savinov/Downloads/hw_ot_Nikitosa"}

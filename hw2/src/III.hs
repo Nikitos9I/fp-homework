@@ -59,7 +59,6 @@ data Action
   = Delete Entity
   | Mkdir TextEditor FilePath
   | Touch TextEditor FilePath
-  | GoTo TextEditor
   | Search TextEditor FilePath
   | DisplayInfo Entity
   | DisplayError String
@@ -69,7 +68,6 @@ instance Show Action where
   show (Delete _) = " Delete "
   show (Mkdir _ _) = " Make Directory "
   show (Touch _ _) = " Touch File "
-  show (GoTo _) = " Go To "
   show (DisplayInfo _) = " Entry Info "
   show (Search _ _) = " Search "
   show _ = " Error "

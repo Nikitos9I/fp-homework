@@ -33,7 +33,7 @@ import IO
 import Manager (Content(..), updateList, renderSize)
 import System.Directory (Permissions(..))
 import Graphics.Vty (Event(..))
-import MainEditor (render, TextEditor, makeTextEditor)
+import MainEditor (render, TextEditor)
 
 newtype TextEditorState = State { editor :: TextEditor }
 

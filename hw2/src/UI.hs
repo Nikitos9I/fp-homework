@@ -11,7 +11,7 @@ import Brick.Themes (Theme, themeToAttrMap, newTheme)
 import Brick.Util (on, fg, bg)
 import Brick.Widgets.Edit (editFocusedAttr, renderEditor)
 import Brick.Widgets.List (listSelectedFocusedAttr, listSelectedAttr)
-import Manager (openEntry, getMode, goBack, openSearch, deleteEntity, displayInfo)
+import Manager (openEntry, getMode, goBack, openSearch, deleteEntity, displayInfo, makeDirectory, makeFile)
 import MainEditor (handleEvent, render, editorAttr, keybindAttr)
 import Debug.Trace
 
@@ -34,10 +34,10 @@ handleMain s (VtyEvent ev) = case ev of
   EvKey KEnter [] -> openEntry s
   EvKey (KChar 'f') [MCtrl] -> openSearch s
   EvKey (KChar 'z') [MCtrl] -> goBack s
-  EvKey (KChar 'd') [MCtrl] -> deleteEntity s
+  EvKey (KChar 'r') [MCtrl] -> deleteEntity s
   EvKey (KChar 'p') [MCtrl] -> displayInfo s
---  EvKey (KChar 'm') [MCtrl] -> makeDirectory s
---  EvKey (KChar 't') [MCtrl] -> makeFile s
+  EvKey (KChar 'd') [MCtrl] -> makeDirectory s
+  EvKey (KChar 't') [MCtrl] -> makeFile s
   _ -> MainWindow.handleEvent ev s
 handleMain s _ = continue s
 
