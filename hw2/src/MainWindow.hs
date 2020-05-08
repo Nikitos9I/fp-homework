@@ -1,55 +1,34 @@
 module MainWindow where
 
-import Brick
-  ( BrickEvent(..)
-  , EventM
-  , Next
-  , Widget(..)
-  , (<+>)
-  , continue
-  , hBox
-  , str
-  , txt
-  , vBox
-  , vLimitPercent
-  )
+import Brick (EventM, Next, Widget(..), (<+>), continue, hBox, str, txt, vBox)
 import Brick.Widgets.Border (borderElem, hBorderWithLabel, vBorder)
 import Brick.Widgets.Border.Style (bsCornerBL, bsCornerBR)
 import Brick.Widgets.Core (fill, hLimit, strWrap, vLimit)
-import Brick.Widgets.List
-  ( GenericList(..)
-  , List
-  , handleListEvent
-  , list
-  , listElements
-  , listElementsL
-  , listItemHeightL
-  , listMoveTo
-  , listNameL
-  , listReplace
-  , listSelected
-  , listSelectedElement
-  , renderList
-  )
-import Data.HashMap.Lazy as DHL (lookup, insert)
+import Brick.Widgets.List (handleListEvent, renderList)
+import Data.HashMap.Lazy as DHL (insert, lookup)
 import Data.Maybe (fromJust)
-import qualified Data.Text as T (lines)
 import Data.Time.Clock (UTCTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import Errors (fileNotInVcs)
 import Graphics.Vty (Event(..))
 import IO
-  ( ContentMode(..)
+  ( Action(DisplayError)
+  , ContentMode(..)
   , Entity(..)
   , InfoDir(..)
   , InfoFile(..)
   , MState(..)
   , MapFPtoEntity
   , VCS(..)
-  , Action(DisplayError)
   )
-import Manager (renderSize, updateFileList, updateList, updateVcsList, selectedEntity)
+import Manager
+  ( renderSize
+  , selectedEntity
+  , updateFileList
+  , updateList
+  , updateVcsList
+  )
 import System.Directory (Permissions(..))
-import Errors (fileNotInVcs)
 
 renderCurDirH :: MState -> Widget String
 renderCurDirH s = str ((dPath . dir . curEntry) s) <+> fill ' '
@@ -171,7 +150,7 @@ renderVcsRevC :: MState -> Widget String
 renderVcsRevC st = renderList (const txt) True _list
   where
     _fp = fromJust $ selectedEntity st
-    _vcsMap = vcsMapList . vcs $ st 
+    _vcsMap = vcsMapList . vcs $ st
     _list = fromJust $ DHL.lookup _fp _vcsMap
 
 emptyContent :: Widget String
@@ -217,14 +196,14 @@ handleEvent ev st =
           op <- handleListEvent ev a
           continue $ updateFileList op st
         Nothing -> continue st
-    VCSRevContent -> case _lst of
-      Nothing -> continue $ st {action = DisplayError fileNotInVcs}
-      Just a -> do
-        op <- handleListEvent ev a
-        continue $ st {vcs = newVcs op}
-      where
-          _fp = fromJust $ selectedEntity st
-          _lstMap = (vcsMapList . vcs) st
-          _lst = DHL.lookup _fp _lstMap
-          newVcsMapList op = DHL.insert _fp op _lstMap
-          newVcs op = (vcs st) {vcsMapList = newVcsMapList op}
+    VCSRevContent ->
+      case _lst of
+        Nothing -> continue $ st {action = DisplayError fileNotInVcs}
+        Just a -> do
+          op <- handleListEvent ev a
+          continue $ st {vcs = newVcs op}
+      where _fp = fromJust $ selectedEntity st
+            _lstMap = (vcsMapList . vcs) st
+            _lst = DHL.lookup _fp _lstMap
+            newVcsMapList op = DHL.insert _fp op _lstMap
+            newVcs op = (vcs st) {vcsMapList = newVcsMapList op}
