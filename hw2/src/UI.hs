@@ -2,38 +2,25 @@ module UI where
 
 import Brick
   ( App(..)
-  , AttrName
-  , AttrName(..)
   , BrickEvent(..)
   , EventM
   , Next
   , Widget(..)
-  , attrMap
-  , attrName
   , defaultMain
   , showFirstCursor
-  , str
-  , strWrap
   , vBox
-  , vLimit
-  , vLimitPercent
   )
 import Brick.Main (continue, halt)
 import Brick.Themes (Theme, newTheme, themeToAttrMap)
 import Brick.Util (bg, fg, on)
-import Brick.Widgets.Edit (editFocusedAttr, renderEditor)
+import Brick.Widgets.Edit (editFocusedAttr)
 import Brick.Widgets.List (listSelectedAttr, listSelectedFocusedAttr)
 import Control.Monad.IO.Class (liftIO)
-import Debug.Trace
 import Footer
 import Graphics.Vty
 import IO
   ( Action(..)
-  , Entity(..)
-  , InfoDir(..)
-  , InfoFile(..)
   , MState(..)
-  , TextEditor
   , backToFS
   )
 import MainEditor (editorAttr, handleEvent, keybindAttr, render, errorAttr)
@@ -61,14 +48,12 @@ drawResults s = [widgets]
     widgets = vBox [MainWindow.draw s, Footer.draw]
 
 draw :: MState -> [Widget String]
---draw s | trace (show $ action s) False = undefined
 draw s =
   case action s of
     Nothing_ -> drawResults s
     _ -> [MainEditor.render s]
 
 handleMain :: MState -> BrickEvent String e -> EventM String (Next MState)
---handleMain s (VtyEvent ev) | trace (show ev) False = undefined
 handleMain s (VtyEvent ev) =
   case ev of
     EvKey KEsc [] -> join (liftIO $ halt <$> backToFS s)

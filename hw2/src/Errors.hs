@@ -1,4 +1,11 @@
-module Errors where
+module Errors
+  ( cdAboveRootDir
+  , openVCSListFromFile
+  , initVCSFromFile
+  , vcsNotInitiated
+  , fileNotInVcs
+  , vcsAlreadyExist
+  ) where
 
 type Exception = String
 
@@ -17,5 +24,5 @@ vcsNotInitiated = "Sorry, You should init vcs firstly"
 fileNotInVcs :: Exception
 fileNotInVcs = "Sorry, this file is not under vcs"
 
-vcAlreadyExist :: Exception
-vcAlreadyExist = "Sorry, vcs already exists"
+vcsAlreadyExist :: Exception
+vcsAlreadyExist = "Sorry, vcs already exists"

@@ -16,7 +16,6 @@ import Brick.Widgets.Border (borderWithLabel, hBorder)
 import Brick.Widgets.Center (centerLayer, hCenter)
 import Brick.Widgets.Core
   ( (<+>)
-  , hLimit
   , padLeftRight
   , padTopBottom
   , str
@@ -26,9 +25,9 @@ import Brick.Widgets.Core
 import qualified Brick.Widgets.Edit as Edit
 import Control.Monad.Cont (join)
 import Control.Monad.IO.Class (liftIO)
-import Data.Text (Text, lines, pack, unpack)
+import Data.Text (Text, lines, unpack)
 import Graphics.Vty (Event(..), Key(..))
-import IO (Action(..), Entity(..), InfoDir(..), InfoFile(..), MState(..))
+import IO (Action(..), MState(..))
 import Manager
   ( displayMore
   , displayPath
@@ -164,7 +163,9 @@ updateCommentEditor nEdit state = state {action = _action}
     _action = (action state) {aEditor = nEdit, aComment = editorLine nEdit}
 
 handleEvent :: BrickEvent String e -> MState -> EventM String (Next MState)
-handleEvent (AppEvent ev) st = undefined
+handleEvent (AppEvent _) _ = error "Unexpected event"
+handleEvent MouseUp {} _ = error "Unexpected event"
+handleEvent MouseDown {} _ = error "Unexpected event"
 handleEvent (VtyEvent ev) st =
   case ev of
     EvKey KEsc [] -> continue $ exit st

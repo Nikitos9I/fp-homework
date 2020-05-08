@@ -3,10 +3,9 @@
 module Manager where
 
 import Brick (EventM, Next)
-import Brick.Main (continue, suspendAndResume)
+import Brick.Main (continue)
 import Brick.Widgets.Edit (editorText)
 import Brick.Widgets.List (GenericList, list, listRemove, listSelectedElement)
-import Control.Exception (SomeException, try)
 import Data.HashMap.Lazy as DHL
   ( delete
   , empty
@@ -16,16 +15,15 @@ import Data.HashMap.Lazy as DHL
   , lookup
   )
 import Data.Maybe (fromJust)
-import Data.Text as T (Text, empty, isInfixOf, lines, pack)
+import Data.Text as T (Text, empty, isInfixOf, pack)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
-import Debug.Trace
 import Errors
   ( cdAboveRootDir
   , fileNotInVcs
   , initVCSFromFile
   , openVCSListFromFile
-  , vcAlreadyExist
+  , vcsAlreadyExist
   , vcsNotInitiated
   )
 import IO
@@ -80,7 +78,6 @@ getMode ent =
     File {} -> FileContent
 
 openEntry' :: MState -> FilePath -> MState
--- handle exception with open unreaded by hGetsContent content
 openEntry' state _dirFP =
   case DHL.lookup _dirFP _map of
     Just newEntry -> state {curEntry = newEntry, mode = getMode newEntry}
@@ -174,11 +171,13 @@ deleteEntity' fp state =
       state
         { curEntry = fromJust $ DHL.lookup (dPath newInfo) finalMap
         , refMap = finalMap
+        , toDelete = _toDelete
         }
   where
     _map = refMap state
     entity = fromJust $ DHL.lookup fp _map
     _parent p = fromJust $ DHL.lookup p _map
+    _toDelete = DHL.insert fp entity $ toDelete state
 
 deleteEntity :: MState -> EventM String (Next MState)
 deleteEntity state =
@@ -336,7 +335,11 @@ insertNew st ent = do
         case ent of
           Dir i _ _ -> DHL.insert (dPath i) ent _newMap1
           File i _ -> DHL.insert (fPath i) ent _newMap1
-  st {curEntry = newParentEnt, refMap = _newMap2}
+      _toInsert =
+        case ent of
+          Dir i _ _ -> DHL.insert (dPath i) ent (toInsert st)
+          File i _ -> DHL.insert (fPath i) ent (toInsert st)
+  st {curEntry = newParentEnt, refMap = _newMap2, toInsert = _toInsert}
 
 handleMakeDirEvent :: MState -> String -> MState
 handleMakeDirEvent st _dirName =
@@ -364,16 +367,16 @@ handleWriteToFile st _txt fp = do
       _lst = list "fContentNew" [_txt] 1
       updatedFile = (file _ent) {fContent = Just _txt, fContentList = Just _lst}
       newMap = DHL.insert fp (_ent {file = updatedFile}) _map
-  return $ st {refMap = newMap, action = Nothing_}
+      newUpdated = DHL.insert fp (_ent {file = updatedFile}) (toUpdate st)
+  return $ st {refMap = newMap, action = Nothing_, toUpdate = newUpdated}
 
---  error (show _lst)
 openHelp :: MState -> EventM String (Next MState)
 openHelp st = continue $ st {action = DisplayHelp}
 
 init :: MState -> EventM String (Next MState)
 init st =
   case vcs st of
-    VCS {} -> continue $ st {action = DisplayError vcAlreadyExist}
+    VCS {} -> continue $ st {action = DisplayError vcsAlreadyExist}
     _ ->
       case curEntry st of
         File {} -> continue $ st {action = DisplayError initVCSFromFile}

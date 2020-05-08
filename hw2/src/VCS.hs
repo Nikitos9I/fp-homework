@@ -13,7 +13,6 @@ import Data.Text (Text, append, pack)
 import IO
   ( Action(..)
   , Entity(..)
-  , InfoDir(..)
   , InfoFile(..)
   , MState(..)
   , VCS(..)
@@ -55,7 +54,6 @@ handleAddChangedEntity' st com ent =
       where newStList = map (handleAddChangedEntity' st com) lst
 
 handleAddChangedEntity :: MState -> Text -> MState
--- handle exception with add entity above root vcs dir
 handleAddChangedEntity st comment = newState {action = Nothing_}
   where
     _fp = fromJust $ selectedEntity st

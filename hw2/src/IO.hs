@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module IO where
 
@@ -6,15 +7,31 @@ import Brick.Widgets.Edit (Editor)
 import Brick.Widgets.List (GenericList, Splittable, list, splitAt)
 import Conduit
 import Control.Exception (SomeException, try)
-import Control.Monad.State
-import Data.HashMap.Lazy as DHL hiding (filter)
-import Data.Hashable
+import Control.Monad.Cont (forM, when, forM_)
+import Data.HashMap.Lazy as DHL
+  ( HashMap
+  , elems
+  , empty
+  , insert
+  , lookup
+  , unionWithKey
+  , unions
+  )
+import Data.Hashable (Hashable, hash, hashWithSalt)
 import Data.Maybe (fromJust)
-import Data.Text as T (Text, empty, lines, pack)
-import Data.Time.Clock
+import Data.Text as T (Text, empty, lines, pack, unpack)
+import Data.Time.Clock (UTCTime)
 import System.Directory
-import System.FilePath ((</>), splitPath, takeExtension, takeFileName)
-import System.IO (IOMode(..), hGetContents, openFile, hSetEncoding, latin1)
+  ( Permissions(..)
+  , doesDirectoryExist
+  , getAccessTime
+  , getDirectoryContents
+  , getFileSize
+  , getModificationTime
+  , getPermissions, removeDirectoryRecursive, doesFileExist, removeFile, createDirectoryIfMissing
+  )
+import System.FilePath ((</>), splitPath, takeExtension, takeFileName, FilePath)
+import System.IO (IOMode(..), hGetContents, hSetEncoding, latin1, openFile)
 
 type MapFPtoEntity = HashMap FilePath Entity
 
@@ -45,6 +62,9 @@ data MState =
     , action :: Action
     , vcs :: VCS
     , mode :: ContentMode
+    , toDelete :: MapFPtoEntity
+    , toInsert :: MapFPtoEntity
+    , toUpdate :: MapFPtoEntity
     }
 
 data VCS
@@ -231,10 +251,50 @@ initState opt = do
   let _dir = dirPath opt
   _content <- getRecursiveContents _dir mempty
   let root = fromJust $ DHL.lookup _dir _content
-  return $ State root _content Nothing_ VCSNothing DirContent
+  return $
+    State
+      root
+      _content
+      Nothing_
+      VCSNothing
+      DirContent
+      DHL.empty
+      DHL.empty
+      DHL.empty
 
 testOpt :: FMOptions
 testOpt = FMOptions {dirPath = "/Users/nikita.savinov/Downloads/hw_ot_Nikitosa"}
 
+goToRoot :: MState -> MState
+goToRoot st =
+  case DHL.lookup pp _refMap of
+    Just a -> goToRoot $ st {curEntry = a}
+    Nothing -> st
+  where
+    _curEntry = curEntry st
+    _refMap = refMap st
+    pp =
+      case _curEntry of
+        Dir _ p _ -> p
+        File _ p -> p
+
 backToFS :: MState -> IO MState
-backToFS st = return st
+backToFS st = do
+  let _toDelete = elems $ toDelete st
+      _toInsert = elems $ DHL.unionWithKey (\_ _ v2 -> v2) (toInsert st) (toUpdate st)
+  forM_
+    _toDelete
+    (\case
+       Dir info _ _ -> do
+         isDir <- doesDirectoryExist (dPath info)
+         when isDir $ removeDirectoryRecursive (dPath info)
+       File info _ -> do
+         isFile <- doesFileExist (fPath info)
+         when isFile $ removeFile (fPath info))
+  forM_
+    _toInsert
+    (\case
+       Dir info _ _ -> createDirectoryIfMissing True (dPath info)
+       File info _ ->
+         writeFile (fPath info) (maybe mempty unpack (fContent info)))
+  return st
