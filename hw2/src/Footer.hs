@@ -21,8 +21,11 @@ search = "Search"
 back :: FooterElem
 back = "Go back"
 
+exit :: FooterElem
+exit = "Exit"
+
 helpT :: FooterElemTitle
-helpT = " Ctrl + C "
+helpT = " Ctrl + O "
 
 authorT :: FooterElemTitle
 authorT = " Author "
@@ -32,6 +35,9 @@ searchT = " Ctrl + F "
 
 backT :: FooterElemTitle
 backT = " Ctrl + Z "
+
+exitT :: FooterElemTitle
+exitT = " Esc "
 
 renderFooterWidget :: (FooterElem, FooterElemTitle) -> Widget String
 renderFooterWidget (fe, fet) = modifs $ hLimit (wdt + 2) $ vBox [top, middle]
@@ -52,6 +58,7 @@ draw =
     [ renderFooterWidget (help, helpT)
     , renderFooterWidget (search, searchT)
     , renderFooterWidget (back, backT)
+    , renderFooterWidget (exit, exitT)
     , hCenter $ fill ' '
     , renderFooterWidget (author, authorT)
     ]

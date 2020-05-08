@@ -5,7 +5,7 @@ module Manager where
 import Brick (EventM, Next)
 import Brick.Main (continue, suspendAndResume)
 import Brick.Widgets.Edit (editorText)
-import Brick.Widgets.List (GenericList, list, listSelectedElement)
+import Brick.Widgets.List (GenericList, list, listRemove, listSelectedElement)
 import Control.Exception (SomeException, try)
 import Data.HashMap.Lazy as DHL
   ( delete
@@ -16,46 +16,49 @@ import Data.HashMap.Lazy as DHL
   , lookup
   )
 import Data.Maybe (fromJust)
-import Data.Text (empty, isInfixOf, pack, Text)
+import Data.Text as T (Text, empty, isInfixOf, lines, pack)
+import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Debug.Trace
+import Errors
+  ( cdAboveRootDir
+  , fileNotInVcs
+  , initVCSFromFile
+  , openVCSListFromFile
+  , vcAlreadyExist
+  , vcsNotInitiated
+  )
 import IO
   ( Action(..)
+  , ContentMode(..)
   , Entity(..)
   , InfoDir(..)
   , InfoFile(..)
+  , MGList
   , MState(..)
   , MapFPtoEntity
   , TextEditor
   , VCS(..)
   )
-import System.Process (callCommand)
-import Control.Monad.IO.Class (liftIO)
-import Data.Time.Clock (getCurrentTime)
 import System.Directory.Internal (Permissions(..))
 import System.FilePath.Posix ((</>), takeExtension)
 
-data Content
-  = DirContent
-  | FileContent
-
-getMode :: MState -> Content
-getMode x =
-  case curEntry x of
-    Dir {} -> DirContent
-    File _ _ -> FileContent
-
-updateList :: GenericList String [] FilePath -> MState -> MState
+updateList :: MGList -> MState -> MState
 updateList lst x = x {curEntry = entry}
   where
     entry = (curEntry x) {dir = infoDir}
     infoDir = ((dir . curEntry) x) {dEntryList = lst}
-      
+
 updateFileList :: GenericList String [] Text -> MState -> MState
 updateFileList lst x = x {curEntry = entry}
   where
     entry = (curEntry x) {file = infoFile}
-    infoFile = ((file . curEntry) x) {fContentList = lst}
+    infoFile = ((file . curEntry) x) {fContentList = Just lst}
+
+updateVcsList :: MGList -> MState -> MState
+updateVcsList lst x = x {vcs = _vcs}
+  where
+    _vcs = (vcs x) {fileList = lst}
 
 selectedEntity :: MState -> Maybe FilePath
 selectedEntity x =
@@ -70,11 +73,20 @@ currentEntity x =
     Dir info _ _ -> fromJust $ DHL.lookup (dPath info) (refMap x)
     File info _ -> fromJust $ DHL.lookup (fPath info) (refMap x)
 
+getMode :: Entity -> ContentMode
+getMode ent =
+  case ent of
+    Dir {} -> DirContent
+    File {} -> FileContent
+
 openEntry' :: MState -> FilePath -> MState
-openEntry' state _dirFP = state {curEntry = newEntry}
+-- handle exception with open unreaded by hGetsContent content
+openEntry' state _dirFP =
+  case DHL.lookup _dirFP _map of
+    Just newEntry -> state {curEntry = newEntry, mode = getMode newEntry}
+    Nothing -> state {action = DisplayError cdAboveRootDir}
   where
     _map = refMap state
-    newEntry = fromJust $ DHL.lookup _dirFP _map
 
 openEntry :: MState -> EventM String (Next MState)
 openEntry state =
@@ -86,12 +98,20 @@ openEntry state =
         _ -> error "Unreacheble pattern"
     _ -> continue state
 
+actionWithEntry :: MState -> EventM String (Next MState)
+actionWithEntry state =
+  case mode state of
+    VCSContent -> continue $ handleRemoveVcsFile state
+    VCSRevContent -> continue $ handleRemoveVcsRevFile state
+    _ -> openEntry state
+
 goBack :: MState -> EventM String (Next MState)
--- handle exception with go back from root
 goBack state =
-  case currentEntity state of
-    Dir _ fp _ -> continue $ openEntry' state fp
-    File _ fp -> continue $ openEntry' state fp
+  case mode state of
+    DirContent -> continue $ openEntry' state $ (dParent . curEntry) state
+    FileContent -> continue $ openEntry' state $ (fParent . curEntry) state
+    VCSContent -> continue $ state {mode = DirContent}
+    VCSRevContent -> continue $ state {mode = DirContent}
 
 initTextEditor :: String -> TextEditor
 initTextEditor suffix = editorText ("local" ++ suffix) (Just 3) mempty
@@ -100,7 +120,7 @@ openSearch :: MState -> EventM String (Next MState)
 openSearch state =
   continue $ state {action = Search (initTextEditor "srf") mempty}
 
-newGList :: [Entity] -> FilePath -> GenericList String [] FilePath
+newGList :: [Entity] -> FilePath -> MGList
 newGList newLst fp =
   list
     (fp ++ "1")
@@ -254,11 +274,16 @@ displayInfo state = continue $ state {action = DisplayInfo entity}
     entity = fromJust $ DHL.lookup (fromJust $ selectedEntity state) _map
 
 makeDirectory :: MState -> EventM String (Next MState)
-makeDirectory state =
-  continue $ state {action = Mkdir (initTextEditor "mkd") mempty}
+makeDirectory state = continue $ state {action = Mkdir (initTextEditor "mkd")}
 
 makeFile :: MState -> EventM String (Next MState)
-makeFile state = continue $ state {action = Touch (initTextEditor "mkf") mempty}
+makeFile state = continue $ state {action = Touch (initTextEditor "mkf")}
+
+writeToFile :: MState -> EventM String (Next MState)
+writeToFile state =
+  continue $
+  state
+    {action = Write (initTextEditor "wtf") (fromJust $ selectedEntity state)}
 
 defaultPermissions :: Permissions
 defaultPermissions =
@@ -294,7 +319,7 @@ makeNewFile st _fileName = do
           , fType = takeExtension _filePath
           , fPath = _filePath
           , fTimes = Just (_times, _times)
-          , fContentList = list "fContent" [] 1
+          , fContentList = Just $ list "fContent" [] 1
           }
   return $ File _file ((dPath . dir . curEntry) st)
 
@@ -327,26 +352,99 @@ handleSearchEvent st = do
   let _searchQuery = (sQuery . action) st
       _map = refMap st
       _searchResult =
-        if _searchQuery == Data.Text.empty
+        if _searchQuery == T.empty
           then DHL.empty
           else DHL.filterWithKey (\k _ -> _searchQuery `isInfixOf` pack k) _map
   DHL.keys _searchResult
-  
+
+handleWriteToFile :: MState -> Text -> FilePath -> IO MState
+handleWriteToFile st _txt fp = do
+  let _map = refMap st
+      _ent = fromJust $ DHL.lookup fp _map
+      _lst = list "fContentNew" [_txt] 1
+      updatedFile = (file _ent) {fContent = Just _txt, fContentList = Just _lst}
+      newMap = DHL.insert fp (_ent {file = updatedFile}) _map
+  return $ st {refMap = newMap, action = Nothing_}
+
+--  error (show _lst)
 openHelp :: MState -> EventM String (Next MState)
-openHelp st = continue $ st {action = DisplayHelp} 
+openHelp st = continue $ st {action = DisplayHelp}
 
 init :: MState -> EventM String (Next MState)
--- handle exception with init not from dir
-init st = continue $ st {vcs = _vcs}
+init st =
+  case vcs st of
+    VCS {} -> continue $ st {action = DisplayError vcAlreadyExist}
+    _ ->
+      case curEntry st of
+        File {} -> continue $ st {action = DisplayError initVCSFromFile}
+        Dir {} -> continue $ st {vcs = _vcs}
   where
+    _list = list "vcsGenericList" [] 1
     _vcs =
       VCS
         { rootFP = (dPath . dir . curEntry) st
+        , fileList = _list
         , vcsMapData = DHL.empty
         , vcsMapList = DHL.empty
         }
 
-addEntity :: MState -> EventM String (Next MState)
--- handle exception with vcs initiated
-addEntity st =
-  continue $ st {action = VCSAdditionalComment (initTextEditor "ade") mempty}
+addChangedEntity :: MState -> EventM String (Next MState)
+addChangedEntity st =
+  case vcs st of
+    VCSNothing -> continue $ st {action = DisplayError vcsNotInitiated}
+    _ ->
+      continue $
+      st {action = VCSAdditionalComment (initTextEditor "ade") mempty}
+
+openVCSList :: MState -> EventM String (Next MState)
+openVCSList st =
+  case vcs st of
+    VCSNothing -> continue $ st {action = DisplayError vcsNotInitiated}
+    _ ->
+      case curEntry st of
+        File {} -> continue $ st {action = DisplayError openVCSListFromFile}
+        Dir {} -> continue $ st {mode = VCSContent}
+
+selectedVcsFile :: MGList -> FilePath
+selectedVcsFile lst = snd $ fromJust $ listSelectedElement lst
+
+handleRemoveVcsFile :: MState -> MState
+handleRemoveVcsFile st = do
+  let _vcs = vcs st
+      _selected = selectedVcsFile $ fileList _vcs
+      _data = DHL.delete _selected $ vcsMapData _vcs
+      _list = DHL.delete _selected $ vcsMapList _vcs
+      newList = list "newVcsFileList" (DHL.keys _data) 1
+      newVcs = _vcs {fileList = newList, vcsMapData = _data, vcsMapList = _list}
+  st {vcs = newVcs}
+
+openVCSRevList :: MState -> EventM String (Next MState)
+openVCSRevList st =
+  case vcs st of
+    VCSNothing -> continue $ st {action = DisplayError vcsNotInitiated}
+    _ ->
+      case curEntry st of
+        File {} -> continue $ st {action = DisplayError openVCSListFromFile}
+        Dir {} ->
+          case _lst of
+            Nothing -> continue $ st {action = DisplayError fileNotInVcs}
+            _ -> continue $ st {mode = VCSRevContent}
+          where _fp = fromJust $ selectedEntity st
+                _lstMap = (vcsMapList . vcs) st
+                _lst = DHL.lookup _fp _lstMap
+
+handleRemoveVcsRevFile :: MState -> MState
+handleRemoveVcsRevFile st = do
+  let _vcs = vcs st
+      _mapList = vcsMapList _vcs
+      _fp = fromJust $ selectedEntity st
+      _lst = fromJust $ DHL.lookup _fp _mapList
+      _selected = fromJust $ listSelectedElement _lst
+      newLst = listRemove (fst _selected) _lst
+      newMapLst = DHL.insert _fp newLst _mapList
+      _mapData = vcsMapData _vcs
+      _lstD = fromJust $ DHL.lookup _fp _mapData
+      newLstD = filter (\(x, _, _) -> x /= fst _selected) _lstD
+      newMapData = DHL.insert _fp newLstD _mapData
+      newVcs = _vcs {vcsMapList = newMapLst, vcsMapData = newMapData}
+  st {vcs = newVcs}

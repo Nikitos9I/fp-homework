@@ -9,8 +9,8 @@ import Brick
   , attrName
   , continue
   , txt
-  , vBox
   , txtWrap
+  , vBox
   )
 import Brick.Widgets.Border (borderWithLabel, hBorder)
 import Brick.Widgets.Center (centerLayer, hCenter)
@@ -26,7 +26,7 @@ import Brick.Widgets.Core
 import qualified Brick.Widgets.Edit as Edit
 import Control.Monad.Cont (join)
 import Control.Monad.IO.Class (liftIO)
-import Data.Text (Text, pack, unpack, lines)
+import Data.Text (Text, lines, pack, unpack)
 import Graphics.Vty (Event(..), Key(..))
 import IO (Action(..), Entity(..), InfoDir(..), InfoFile(..), MState(..))
 import Manager
@@ -38,8 +38,9 @@ import Manager
   , handleMakeDirEvent
   , handleSearchEvent
   , handleTouchEvent
+  , handleWriteToFile
   )
-import VCS (handleAddEntity)
+import VCS (handleAddChangedEntity)
 
 type TextEditor = Edit.Editor Text String
 
@@ -49,27 +50,27 @@ editorAttr = attrName "editor"
 keybindAttr :: AttrName
 keybindAttr = attrName "keybinding"
 
+errorAttr :: AttrName
+errorAttr = attrName "error"
+
 editorLine :: TextEditor -> Text
 editorLine = head . Edit.getEditContents
 
-updateContent :: TextEditor -> MState -> MState
-updateContent edt x = x {curEntry = entry}
-  where
-    entry = (curEntry x) {file = infoFile}
-    infoFile = ((file . curEntry) x) {fContent = pack "edt"}
-    
 helpContent :: [String]
-helpContent = [ "Ctrl + Z - return to parent entity"
-              , "Ctrl + P - print info about entity"
-              , "Ctrl + F - search"
-              , "Ctrl + R - remove entity"
-              , "Ctrl + D - make a directory"
-              , "Ctrl + T - touch a file"
-              , "Ctrl + V - vcs init"
-              , "Ctrl + A - add file to vcs"
-              , "Enter - go to selected entity/open file for reading"
-              , "Esc - exit from file manager"
-              ]
+helpContent =
+  [ "Ctrl + Z - return to parent entity"
+  , "Ctrl + P - print info about entity"
+  , "Ctrl + F - search"
+  , "Ctrl + R - remove entity"
+  , "Ctrl + D - make a directory"
+  , "Ctrl + T - touch a file"
+  , "Ctrl + V - vcs init"
+  , "Ctrl + A - add file to vcs"
+  , "Ctrl + L - show list of file revision in vcs (and after `Enter` for removing revision)"
+  , "Shift + R - show files under vcs (and after `Enter` for removing file from vcs)"
+  , "Enter - go to selected entity/open file for reading"
+  , "Esc - exit from file manager"
+  ]
 
 ------------------------------------------------------------------------
 -------------------------------- Render --------------------------------
@@ -89,14 +90,17 @@ renderBody st =
   vBox $
   case action st of
     DisplayFile _txt -> map txtWrap (Data.Text.lines _txt)
+    DisplayError _txt -> [(withDefAttr errorAttr . str) _txt]
     DisplayHelp -> map strWrap helpContent
-    DisplayInfo en -> 
+    DisplayInfo en ->
       map strWrap . (displaySize en :) $
       displayPerms en ++ displayTimes en ++ [displayPath en, displayMore en]
     Search edit _ -> [str "Search for:", renderEdit0r edit, editorForSearch st]
-    Mkdir edit _ -> [str "Input dircetory name:", renderEdit0r edit]
-    Touch edit _ -> [str "Input file name (with extension):", renderEdit0r edit]
+    Mkdir edit -> [str "Input directory name:", renderEdit0r edit]
+    Touch edit -> [str "Input file name (with extension):", renderEdit0r edit]
+    Write edit _ -> [str "Input text:", renderEdit0r edit]
     VCSAdditionalComment edit _ -> [str "Add comment:", renderEdit0r edit]
+    Nothing_ -> error "Unexpected pattern"
 
 renderFooter :: Action -> Widget String
 renderFooter act =
@@ -105,9 +109,10 @@ renderFooter act =
     kb = withDefAttr keybindAttr . str
     _txt =
       case act of
-        Mkdir _ _ -> " to make the directory, "
-        Touch _ _ -> " to touch the file, "
+        Mkdir _ -> " to make the directory, "
+        Touch _ -> " to touch the file, "
         Search _ _ -> " to end search, "
+        Write _ _ -> " to write to file "
         VCSAdditionalComment _ _ -> " to add comment, "
         _ -> " or "
 
@@ -131,10 +136,11 @@ performAction st =
     DisplayFile _ -> return $ exit st
     DisplayError _ -> return $ exit st
     DisplayHelp -> return $ exit st
-    Mkdir edit _ -> return $ handleMakeDirEvent st (unpack $ editorLine edit)
-    Touch edit _ -> handleTouchEvent st (unpack $ editorLine edit)
+    Mkdir edit -> return $ handleMakeDirEvent st (unpack $ editorLine edit)
+    Touch edit -> handleTouchEvent st (unpack $ editorLine edit)
     Search _ _ -> return $ exit st
-    VCSAdditionalComment _ _txt -> return $ handleAddEntity st _txt
+    Write edit fp -> handleWriteToFile st (editorLine edit) fp
+    VCSAdditionalComment _ _txt -> return $ handleAddChangedEntity st _txt
     Nothing_ -> error "Unreachable pattern"
 
 updateSearchEditor :: TextEditor -> MState -> MState
@@ -147,8 +153,9 @@ updateEditor nEditor state = state {action = _action}
   where
     _action =
       case action state of
-        Mkdir _ _ -> (action state) {mEditor = nEditor}
-        Touch _ _ -> (action state) {tEditor = nEditor}
+        Mkdir _ -> (action state) {mEditor = nEditor}
+        Touch _ -> (action state) {tEditor = nEditor}
+        Write _ _ -> (action state) {wEditor = nEditor}
         _ -> error "Unexpected pattern"
 
 updateCommentEditor :: TextEditor -> MState -> MState
@@ -168,10 +175,13 @@ handleEvent (VtyEvent ev) st =
         DisplayError _ -> continue st
         DisplayFile _ -> continue st
         DisplayHelp -> continue st
-        Mkdir edit _ -> do
+        Mkdir edit -> do
           nEditor <- Edit.handleEditorEvent ev edit
           continue $ updateEditor nEditor st
-        Touch edit _ -> do
+        Touch edit -> do
+          nEditor <- Edit.handleEditorEvent ev edit
+          continue $ updateEditor nEditor st
+        Write edit _ -> do
           nEditor <- Edit.handleEditorEvent ev edit
           continue $ updateEditor nEditor st
         Search edit _ -> do

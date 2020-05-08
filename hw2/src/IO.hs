@@ -9,18 +9,22 @@ import Control.Exception (SomeException, try)
 import Control.Monad.State
 import Data.HashMap.Lazy as DHL hiding (filter)
 import Data.Hashable
-import Data.Maybe
-import Data.Text as T (Text, pack, lines, empty)
+import Data.Maybe (fromJust)
+import Data.Text as T (Text, empty, lines, pack)
 import Data.Time.Clock
 import System.Directory
 import System.FilePath ((</>), splitPath, takeExtension, takeFileName)
-import System.IO (IOMode(..), hGetContents, openFile)
+import System.IO (IOMode(..), hGetContents, openFile, hSetEncoding, latin1)
 
 type MapFPtoEntity = HashMap FilePath Entity
 
+type MGList = GenericList String [] FilePath
+
 type TextEditor = Editor Text String
 
-type VCSMapFPtoData = HashMap FilePath [(Entity, Text)]
+type Data = (Int, Entity, Text)
+
+type VCSMapFPtoData = HashMap FilePath [Data]
 
 type VCSList = GenericList String [] Text
 
@@ -40,24 +44,34 @@ data MState =
     , refMap :: MapFPtoEntity
     , action :: Action
     , vcs :: VCS
+    , mode :: ContentMode
     }
 
 data VCS
   = VCS
       { rootFP :: FilePath
+      , fileList :: MGList
       , vcsMapData :: VCSMapFPtoData
       , vcsMapList :: VCSMapFPtoList
       }
   | VCSNothing
 
+data ContentMode
+  = DirContent
+  | FileContent
+  | VCSContent
+  | VCSRevContent
+
 data Action
   = Mkdir
       { mEditor :: TextEditor
-      , mPath :: FilePath
       }
   | Touch
       { tEditor :: TextEditor
-      , tPath :: FilePath
+      }
+  | Write
+      { wEditor :: TextEditor
+      , wPath :: FilePath
       }
   | Search
       { sEditor :: TextEditor
@@ -74,8 +88,9 @@ data Action
   | Nothing_
 
 instance Show Action where
-  show (Mkdir _ _) = " Make Directory "
-  show (Touch _ _) = " Touch File "
+  show (Mkdir _) = " Make Directory "
+  show (Touch _) = " Touch File "
+  show (Write _ fp) = " Write to File (" ++ takeFileName fp ++ ") "
   show (DisplayInfo _) = " Entry Info "
   show (Search _ _) = " Search "
   show (VCSAdditionalComment _ _) = " Additional comment "
@@ -85,13 +100,13 @@ instance Show Action where
 data InfoFile =
   InfoFile
     { fName :: String
-    , fContent :: Text
+    , fContent :: Maybe Text
     , fSize :: Int
     , fPerms :: Maybe Permissions
     , fType :: String
     , fPath :: FilePath
     , fTimes :: Maybe (UTCTime, UTCTime)
-    , fContentList :: GenericList String [] Text
+    , fContentList :: Maybe (GenericList String [] Text)
     }
   deriving (Show)
 
@@ -105,7 +120,7 @@ data InfoDir =
     , dPerms :: Maybe Permissions
     , dPath :: FilePath
     , dEntryListSize :: Int
-    , dEntryList :: GenericList String [] FilePath
+    , dEntryList :: MGList
     }
   deriving (Show)
 
@@ -115,12 +130,12 @@ instance Hashable InfoDir where
 data Entity
   = Dir
       { dir :: InfoDir
-      , parent :: FilePath
+      , dParent :: FilePath
       , children :: [Entity]
       }
   | File
       { file :: InfoFile
-      , parent :: FilePath
+      , fParent :: FilePath
       }
 
 instance Show Entity where
@@ -169,16 +184,20 @@ makeFileInfo filePath = do
   let fileName = takeFileName filePath
       fileType = takeExtension filePath
   handle <- openFile filePath ReadMode
-  content <- hGetContents handle
+  hSetEncoding handle latin1
+  content <- toMaybe <$> try (hGetContents handle)
   fileSize <- getFileSize filePath
   filePerms <- toMaybe <$> try (getPermissions filePath)
   fileTimes <- toMaybe <$> try (getTimes filePath)
   let entryList =
-        list "fContent" (filter (/= T.empty) (T.lines $ pack content)) 1
+        case content of
+          Just a ->
+            Just $ list "fContent" (filter (/= T.empty) (T.lines $ pack a)) 1
+          _ -> Nothing
   return $
     InfoFile
       fileName
-      (pack content)
+      (pack <$> content)
       (fromInteger fileSize)
       filePerms
       fileType
@@ -212,7 +231,10 @@ initState opt = do
   let _dir = dirPath opt
   _content <- getRecursiveContents _dir mempty
   let root = fromJust $ DHL.lookup _dir _content
-  return $ State root _content Nothing_ VCSNothing
+  return $ State root _content Nothing_ VCSNothing DirContent
 
 testOpt :: FMOptions
 testOpt = FMOptions {dirPath = "/Users/nikita.savinov/Downloads/hw_ot_Nikitosa"}
+
+backToFS :: MState -> IO MState
+backToFS st = return st

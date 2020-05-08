@@ -1,11 +1,24 @@
 module MainWindow where
 
-import Brick (Widget(..), (<+>), hBox, str, vBox, EventM, BrickEvent(..), Next, continue, txt, vLimitPercent)
+import Brick
+  ( BrickEvent(..)
+  , EventM
+  , Next
+  , Widget(..)
+  , (<+>)
+  , continue
+  , hBox
+  , str
+  , txt
+  , vBox
+  , vLimitPercent
+  )
 import Brick.Widgets.Border (borderElem, hBorderWithLabel, vBorder)
 import Brick.Widgets.Border.Style (bsCornerBL, bsCornerBR)
 import Brick.Widgets.Core (fill, hLimit, strWrap, vLimit)
 import Brick.Widgets.List
-  ( List
+  ( GenericList(..)
+  , List
   , handleListEvent
   , list
   , listElements
@@ -14,29 +27,29 @@ import Brick.Widgets.List
   , listMoveTo
   , listNameL
   , listReplace
-  , listSelectedElement
   , listSelected
+  , listSelectedElement
   , renderList
-  , GenericList(..)
   )
-import Data.HashMap.Lazy as DHL (lookup)
+import Data.HashMap.Lazy as DHL (lookup, insert)
 import Data.Maybe (fromJust)
+import qualified Data.Text as T (lines)
 import Data.Time.Clock (UTCTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
+import Graphics.Vty (Event(..))
 import IO
-  ( Entity(..)
+  ( ContentMode(..)
+  , Entity(..)
   , InfoDir(..)
   , InfoFile(..)
   , MState(..)
   , MapFPtoEntity
+  , VCS(..)
+  , Action(DisplayError)
   )
-import Manager (Content(..), updateList, renderSize, updateFileList)
+import Manager (renderSize, updateFileList, updateList, updateVcsList, selectedEntity)
 import System.Directory (Permissions(..))
-import Graphics.Vty (Event(..))
-import MainEditor (render, TextEditor)
-import qualified Data.Text as T (lines)
-
-newtype TextEditorState = State { editor :: TextEditor }
+import Errors (fileNotInVcs)
 
 renderCurDirH :: MState -> Widget String
 renderCurDirH s = str ((dPath . dir . curEntry) s) <+> fill ' '
@@ -44,30 +57,36 @@ renderCurDirH s = str ((dPath . dir . curEntry) s) <+> fill ' '
 renderCurDirH' :: Widget String
 renderCurDirH' = str " Current directory "
 
---renderSearchH :: MState -> Widget String
---renderSearchH s =
---  case search s of
---    Empty -> str "Sorry, nothing was found for your search" <+> fill ' '
---    New -> str "Please input filename" <+> fill ' '
---    SearchInfo _ _ -> str "Search result" <+> fill ' '
-
-renderSearchH' :: Widget String
-renderSearchH' = str " Search info "
-
-renderFileH :: MState -> Widget String
-renderFileH _ = str "File content"
+renderFileH :: Widget String
+renderFileH = str "File content"
 
 renderFileH' :: Widget String
 renderFileH' = str ""
 
-renderHeaderWidget :: MState -> Content -> (Widget String, Widget String)
-renderHeaderWidget s DirContent = (renderCurDirH s, renderCurDirH')
-renderHeaderWidget s FileContent = (renderFileH s, renderFileH')
+renderVcsFilesH :: Widget String
+renderVcsFilesH = str "Files under VCS"
 
-renderHeaderBox :: MState -> Content -> Widget String
-renderHeaderBox s c = vLimit 2 $ vBox [middle, bottom]
+renderVcsFilesH' :: Widget String
+renderVcsFilesH' = str ""
+
+renderVcsRevH :: Widget String
+renderVcsRevH = str "History of file changing"
+
+renderVcsRevH' :: Widget String
+renderVcsRevH' = str ""
+
+renderHeaderWidget :: MState -> (Widget String, Widget String)
+renderHeaderWidget s =
+  case mode s of
+    DirContent -> (renderCurDirH s, renderCurDirH')
+    FileContent -> (renderFileH, renderFileH')
+    VCSContent -> (renderVcsFilesH, renderVcsFilesH')
+    VCSRevContent -> (renderVcsRevH, renderVcsRevH')
+
+renderHeaderBox :: MState -> Widget String
+renderHeaderBox s = vLimit 2 $ vBox [middle, bottom]
   where
-    (info, title) = renderHeaderWidget s c
+    (info, title) = renderHeaderWidget s
     middle = hBox [vBorder, hLimit 2 $ fill ' ', info <+> fill ' ', vBorder]
     bottom =
       hBox
@@ -128,7 +147,7 @@ makeWidgetFromEntity _map _ fp =
     , renderTimes $ modifyTime $ times entity
     ]
   where
-    entity = fromJust $ DHL.lookup fp _map 
+    entity = fromJust $ DHL.lookup fp _map
 
 renderCurDirC :: MState -> Widget String
 renderCurDirC s = renderList (makeWidgetFromEntity $ refMap s) True _list
@@ -136,9 +155,24 @@ renderCurDirC s = renderList (makeWidgetFromEntity $ refMap s) True _list
     _list = (dEntryList . dir . curEntry) s
 
 renderFileC :: MState -> Widget String
-renderFileC s = renderList (const txt) False _list
+renderFileC s =
+  case _list of
+    Just lst -> renderList (const txt) False lst
+    Nothing -> emptyContent
   where
     _list = (fContentList . file . curEntry) s
+
+renderVcsFilesC :: MState -> Widget String
+renderVcsFilesC st = renderList (const str) True _list
+  where
+    _list = (fileList . vcs) st
+
+renderVcsRevC :: MState -> Widget String
+renderVcsRevC st = renderList (const txt) True _list
+  where
+    _fp = fromJust $ selectedEntity st
+    _vcsMap = vcsMapList . vcs $ st 
+    _list = fromJust $ DHL.lookup _fp _vcsMap
 
 emptyContent :: Widget String
 emptyContent = vBox (lns ++ [fill ' '])
@@ -146,33 +180,51 @@ emptyContent = vBox (lns ++ [fill ' '])
     lns =
       map strWrap $
       lines
-        "Command Line Interface File Manager\n\
-        \A couple words about my manager"
+        "Sorry, but this file has not content\n\
+        \Or it can't be readable by my tools"
 
-renderContainer :: MState -> Content -> Widget String
-renderContainer s DirContent = renderCurDirC s
-renderContainer s FileContent = renderFileC s
+renderContainer :: MState -> Widget String
+renderContainer s =
+  case mode s of
+    DirContent -> renderCurDirC s
+    FileContent -> renderFileC s
+    VCSContent -> renderVcsFilesC s
+    VCSRevContent -> renderVcsRevC s
 
-draw :: MState -> Content -> Widget String
-draw state content = vBox [header, container]
+draw :: MState -> Widget String
+draw state = vBox [header, container]
   where
-    header = renderHeaderBox state content
-    container =
-      hBox [vBorder, renderContainer state content, vBorder]
+    header = renderHeaderBox state
+    container = hBox [vBorder, renderContainer state, vBorder]
 
 ------------------------------------------------------------------------
 -----------------------------Handle Events------------------------------
 ------------------------------------------------------------------------
-
 handleEvent :: Event -> MState -> EventM String (Next MState)
-handleEvent ev st = case curEntry st of 
-  Dir i _ _ -> do
-    op <- handleListEvent ev _list
-    continue $ updateList op st
-    where
-      _list = dEntryList i
-  File i _ -> do
-    op <- handleListEvent ev _list
-    continue $ updateFileList op st
-    where
-      _list = fContentList i
+handleEvent ev st =
+  case mode st of
+    VCSContent -> do
+      op <- handleListEvent ev _list
+      continue $ updateVcsList op st
+      where _list = (fileList . vcs) st
+    DirContent -> do
+      op <- handleListEvent ev _list
+      continue $ updateList op st
+      where _list = (dEntryList . dir . curEntry) st
+    FileContent ->
+      case (fContentList . file . curEntry) st of
+        Just a -> do
+          op <- handleListEvent ev a
+          continue $ updateFileList op st
+        Nothing -> continue st
+    VCSRevContent -> case _lst of
+      Nothing -> continue $ st {action = DisplayError fileNotInVcs}
+      Just a -> do
+        op <- handleListEvent ev a
+        continue $ st {vcs = newVcs op}
+      where
+          _fp = fromJust $ selectedEntity st
+          _lstMap = (vcsMapList . vcs) st
+          _lst = DHL.lookup _fp _lstMap
+          newVcsMapList op = DHL.insert _fp op _lstMap
+          newVcs op = (vcs st) {vcsMapList = newVcsMapList op}
